@@ -1,0 +1,34 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/home/viktor_srhk/Documents/HighSchool/Personal/SI-CIT/robotic-arm-control/**"
+            ],
+            "defines": [],
+            "cStandard": "c23",
+            "cppStandard": "c++23",
+            "intelliSenseMode": "linux-clang-x64",
+            "mergeConfigurations": false,
+            "recursiveIncludes": {},
+            "compilerPath": "/usr/bin/gcc",
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "Arduino",
+            "includePath": [
+                "/home/viktor_srhk/Arduino/libraries/**",
+                "/home/viktor_srhk/Arduino/libraries/WiiChuck/src",
+                "/home/viktor_srhk/Arduino/libraries/Servo/src",
+                "/home/viktor_srhk/.arduino15/libraries/**"
+            ],
+            "defines": [],
+            "cStandard": "c23",
+            "cppStandard": "c++23",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}

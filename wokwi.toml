@@ -1,0 +1,4 @@
+[wokwi]
+  version = 1
+  firmware = "build/robotic_arm.ino.hex"
+  elf = "build/robotic_arm.ino.elf"

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "author": "Viktor",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-breadboard-half", "id": "bb2", "top": -137.4, "left": -160.4, "attrs": {} },
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 135, "left": -211.8, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_base", "top": -184.4, "left": 316.8, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_shoulder", "top": -100, "left": 320, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_elbow", "top": -20, "left": 320, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_wrist_roll", "top": 55.6, "left": 316.8, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_wrist_pitch", "top": 140, "left": 320, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo_gripper", "top": 220, "left": 320, "attrs": {} }
+  ],
+  "connections": [
+    [ "uno:5V", "bb2:bp.1", "red", [ "v28.7", "h-188.2" ] ],
+    [ "bb2:bn.25", "uno:GND.2", "green", [ "v56.3", "h78.4", "v230.4", "h-134.4" ] ],
+    [ "servo_base:GND", "bb2:bn.24", "black", [ "h0" ] ],
+    [ "servo_shoulder:GND", "bb2:bn.23", "black", [ "h0" ] ],
+    [ "servo_elbow:GND", "bb2:bn.22", "black", [ "h0" ] ],
+    [ "servo_wrist_roll:GND", "bb2:bn.21", "black", [ "h0" ] ],
+    [ "servo_wrist_pitch:GND", "bb2:bn.20", "black", [ "h0" ] ],
+    [ "servo_gripper:GND", "bb2:bn.19", "black", [ "h0" ] ],
+    [ "servo_gripper:V+", "bb2:bp.19", "green", [ "h0" ] ],
+    [ "servo_wrist_roll:V+", "bb2:bp.21", "green", [ "h0" ] ],
+    [ "servo_elbow:V+", "bb2:bp.22", "green", [ "h0" ] ],
+    [ "servo_shoulder:V+", "bb2:bp.23", "green", [ "h0" ] ],
+    [ "servo_base:V+", "bb2:bp.24", "green", [ "h0" ] ],
+    [ "servo_base:PWM", "uno:3", "green", [ "h0" ] ],
+    [ "servo_shoulder:PWM", "uno:5", "green", [ "h0" ] ],
+    [ "servo_elbow:PWM", "uno:6", "green", [ "h0" ] ],
+    [ "servo_wrist_roll:PWM", "uno:9", "green", [ "h0" ] ],
+    [ "servo_wrist_pitch:V+", "bb2:bp.20", "green", [ "h0" ] ],
+    [ "servo_wrist_pitch:PWM", "uno:10", "green", [ "h0" ] ],
+    [ "servo_gripper:PWM", "uno:11", "green", [ "h0" ] ]
+  ],
+  "serialMonitor": { "display": "always", "newline": "lf" },
+  "dependencies": {}
+}
