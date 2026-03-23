@@ -29,7 +29,7 @@ int currentAngle[6] = {90, 140, 90, 90, 90, 60};
 int targetAngle[6] = {90, 140, 90, 90, 90, 60};
 
 const int minAngle[6] = {0, 20, 20, -20, 20, 20};
-const int maxAngle[6] = {180, 160, 160, 180, 160, 110};
+const int maxAngle[6] = {180, 160, 160, 180, 160, 75};
 const int homeAngle[6] = {90, 140, 90, 90, 90, 60};
 const int BASE_STOP_COMMAND = 90;
 const int BASE_MIN_COMMAND = 70;
@@ -251,7 +251,11 @@ void printStatus() {
     Serial.print(i);
     Serial.print(F(": "));
     printJointName(i);
-    Serial.print(F(" | cur="));
+    if (isContinuousJoint(i)) {
+      Serial.print(F(" | cmd="));
+    } else {
+      Serial.print(F(" | cur="));
+    }
     Serial.print(currentAngle[i]);
     Serial.print(F(" | tgt="));
     Serial.println(targetAngle[i]);
@@ -481,53 +485,46 @@ void handleSerialInput() {
       continue;
     }
 
-    if (c >= '1' && c <= '6') {
-      selectedJoint = (uint8_t)(c - '1');
-      controlMode = MODE_SERIAL;
-      printCompactStatus();
-      continue;
-    }
+    if (serialLen == 0) {
+      int next = Serial.peek();
+      bool singleKey = (next == -1 || next == '\r' || next == '\n');
+      if (!singleKey) {
+        // Fall through to buffer the character for a multi-char command.
+      } else if (c >= '1' && c <= '6') {
+        selectedJoint = (uint8_t)(c - '1');
+        controlMode = MODE_SERIAL;
+        printCompactStatus();
+        continue;
+      } else if (c == 'a') {
+        controlMode = MODE_SERIAL;
+        jogSelectedJoint(-2);
+        printJointSummary(selectedJoint);
+        continue;
+      } else if (c == 'z') {
+        controlMode = MODE_SERIAL;
+        jogSelectedJoint(2);
+        printJointSummary(selectedJoint);
+        continue;
+      } else if (c == 'm') {
+        controlMode = MODE_SERIAL;
+        printCompactStatus();
+        continue;
+      } else if (c == 'n') {
+        controlMode = MODE_NUNCHUCK;
+        printCompactStatus();
+        continue;
+      } else if (c == 'd') {
+        controlMode = MODE_DEMO;
+        printCompactStatus();
+        continue;
+      } else if (c == 'p') {
+        printStatus();
+        continue;
+      } else if (c == 'h') {
+        printHelp();
+        continue;
+      }
 
-    if (c == 'a') {
-      controlMode = MODE_SERIAL;
-      jogSelectedJoint(-2);
-      printJointSummary(selectedJoint);
-      continue;
-    }
-
-    if (c == 'z') {
-      controlMode = MODE_SERIAL;
-      jogSelectedJoint(2);
-      printJointSummary(selectedJoint);
-      continue;
-    }
-
-    if (c == 'm') {
-      controlMode = MODE_SERIAL;
-      printCompactStatus();
-      continue;
-    }
-
-    if (c == 'n') {
-      controlMode = MODE_NUNCHUCK;
-      printCompactStatus();
-      continue;
-    }
-
-    if (c == 'd') {
-      controlMode = MODE_DEMO;
-      printCompactStatus();
-      continue;
-    }
-
-    if (c == 'p') {
-      printStatus();
-      continue;
-    }
-
-    if (c == 'h' && serialLen == 0) {
-      printHelp();
-      continue;
     }
 
     if (serialLen + 1 < sizeof(serialBuffer) && c >= 32 && c <= 126) {
