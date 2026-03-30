@@ -1,5 +1,7 @@
 # Notes for the Project
 
+Quick reference only. For the full workflow, wiring, and troubleshooting, see [docs/development.md](docs/development.md).
+
 ## Arduino CLI Setup
 
 ```bash
@@ -12,32 +14,10 @@ If you keep a local copy in `./bin/arduino-cli`, replace `arduino-cli` with that
 
 ## Useful Commands
 
-List connected boards:
-
 ```bash
 arduino-cli board list
-```
-
-List all supported boards:
-
-```bash
 arduino-cli board listall
-```
-
-Compile sketch for Arduino Uno:
-
-```bash
 arduino-cli compile --fqbn arduino:avr:uno arduino/robotic_arm
-```
-
-Upload to Arduino Uno:
-
-```bash
 arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno arduino/robotic_arm
-```
-
-Open serial monitor:
-
-```bash
 arduino-cli monitor -p /dev/ttyACM0 -c baudrate=115200
 ```

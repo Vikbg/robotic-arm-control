@@ -2,6 +2,16 @@
 #include <Wire.h>
 #include <Arduino.h>
 
+// Robotic arm controller for Arduino Uno.
+//
+// The sketch supports three control modes:
+// - Nunchuck mode: joystick, accelerometer, and buttons drive the arm directly
+// - Serial mode: manual diagnostics and joint jogging from the serial monitor
+// - Demo mode: scripted motion for showcase use
+//
+// Internally, the code keeps "logical" joint angles stable across the control
+// logic and only converts to the physical servo command at write time. That
+// makes joint limits, home values, and calibration easier to reason about.
 #define USE_WIICHUCK_LIB 0
 
 #if USE_WIICHUCK_LIB
@@ -32,6 +42,14 @@ const uint8_t homeAngle[6] = {90, 130, 90, 90, 90, 60};
 // Reverse a joint here if the servo is mounted opposite to the logical angle.
 const bool servoReversed[6] = {false, false, false, false, true, false};
 
+// Calibration and tuning values:
+// - minAngle/maxAngle/homeAngle define safe logical limits and the default pose
+// - servoReversed applies mechanical inversion only when writing to the servo
+// - WRIST_FILTER_ALPHA and WRIST_TARGET_DEADBAND reduce wrist jitter from the
+//   Nunchuck accelerometer
+// - GRIPPER_SPEED_PER_SEC controls how fast the gripper opens/closes while
+//   C or Z is held
+// - JOINT_SMOOTH_STEP keeps shoulder/elbow motion smoother than raw step changes
 const int BASE_STOP_COMMAND = 90;
 const int BASE_MIN_COMMAND = 70;
 const int BASE_MAX_COMMAND = 110;
@@ -216,6 +234,8 @@ void setJointTarget(uint8_t joint, int angle)
 
 bool isContinuousJoint(uint8_t joint) { return joint == BASE; }
 
+// Keep the rest of the code in logical angles and only invert the final servo
+// command when the physical mounting requires it.
 uint8_t toServoCommand(uint8_t joint, uint8_t logicalAngle)
 {
   if (joint >= 6 || !servoReversed[joint])
@@ -223,6 +243,9 @@ uint8_t toServoCommand(uint8_t joint, uint8_t logicalAngle)
   return 180 - logicalAngle;
 }
 
+// Base is a continuous-rotation command, so it is written directly. The other
+// joints are rate-limited toward their targets, with the wrist moving in smaller
+// steps than the shoulder/elbow for finer control.
 void smoothMoveStep()
 {
   for (int i = 0; i < 6; i++)
@@ -447,6 +470,8 @@ void processSerialLine(char *line)
   if (argc == 0)
     return;
 
+  // Serial mode exposes both help/status commands and joint control commands.
+  // "set", "step", and shortcut jogs also make serial mode the active mode.
   if (tokenEquals(argv[0], "h") || tokenEquals(argv[0], "help"))
   {
     printHelp();
@@ -586,7 +611,8 @@ void handleSerialInput()
     {
       Serial.println(F("Input too long, line truncated."));
       serialLen = 0;
-      // Optionally, flush the rest of the line
+      // Defensive guard: drop the remaining bytes so the next command starts
+      // from a clean line boundary.
       while (Serial.available() > 0 && Serial.read() != '\n') {}
     }
   }
@@ -626,6 +652,14 @@ void handleCTap()
 
 void manualControl()
 {
+  // Manual control combines two input sources:
+  // - joystick X/Y for base and shoulder/elbow
+  // - accelerometer tilt for wrist roll/pitch
+  // The function computes targets only; `smoothMoveStep()` applies the actual
+  // rate-limited motion afterward.
+  //
+  // These constants are empirical tuning values for the current hardware, not
+  // protocol-level values from the Nunchuck itself.
   const int deadzone = 8;
   const int maxBaseDelta = 5;
   const int maxJointDeltaPerTick = 3;
@@ -660,6 +694,8 @@ void manualControl()
   // WRIST_ROLL ← tilt X, WRIST_PITCH ← tilt Y
   int clampedAccelX = constrain(accelX, accelMin, accelMax);
   int clampedAccelY = constrain(accelY, accelMin, accelMax);
+  // Filter accelerometer motion before mapping it to wrist targets so small
+  // sensor noise does not immediately become servo jitter.
   filteredAccelX += (clampedAccelX - filteredAccelX) * WRIST_FILTER_ALPHA;
   filteredAccelY += (clampedAccelY - filteredAccelY) * WRIST_FILTER_ALPHA;
   int wristRollTarget = map((int)filteredAccelX, accelMin, accelMax, 0, 180);
@@ -712,6 +748,8 @@ void demoControl()
 
 void handleButtonGestures()
 {
+  // Combo gestures are resolved here before the motion step so they can switch
+  // mode or reset the arm without waiting for the next manual control update.
   bool comboNow = btnC && btnZ;
 
   if (comboNow && !comboPrev)
@@ -761,6 +799,8 @@ void setup()
 
 void loop()
 {
+  // Control flow is: read input, resolve gestures/mode, compute targets, then
+  // execute one smooth motion step.
   handleSerialInput();
 
   if (millis() - lastControlMs < CONTROL_INTERVAL_MS)

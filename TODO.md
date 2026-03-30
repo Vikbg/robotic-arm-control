@@ -1,5 +1,7 @@
 # Project TODO
 
+Current state: the core control software is implemented, but hardware validation, final calibration, and demo preparation still need to be completed on the real arm.
+
 ## Phase 1 - Hardware Validation
 
 - [ ] Identify exact servo model and current draw (x3 MG996R + x3 SG90)

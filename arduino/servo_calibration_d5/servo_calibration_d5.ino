@@ -1,8 +1,15 @@
+// Single-servo calibration helper for the D5 output.
+// Use this sketch to probe a continuous servo's stop point or a positional
+// servo's angle range without involving the full robotic arm controller.
 #include <Servo.h>
 
 Servo testServo;
 
+// D5 is fixed here so the sketch always drives the same output pin while you
+// tune one servo on the breadboard.
 const uint8_t SERVO_PIN = 5;
+// 90 is the neutral/stop reference for continuous servos and a midpoint test
+// value for positional servos.
 int servoCommand = 90;
 
 void printHelp() {
@@ -38,6 +45,7 @@ void applyCommand() {
   printStatus();
 }
 
+// Newline-terminated commands are used for exact values and help/status.
 void processLine(char *line) {
   char *cmd = strtok(line, " ");
   char *arg = strtok(NULL, " ");
@@ -65,6 +73,8 @@ void processLine(char *line) {
   Serial.println(F("Unknown command"));
 }
 
+// Single-key shortcuts are applied immediately; longer text commands are
+// accumulated in a fixed buffer so the sketch stays tiny on AVR RAM.
 void handleSerial() {
   static char buffer[24];
   static uint8_t len = 0;
@@ -133,6 +143,7 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  // Start from 90 so the servo does not jump unexpectedly at boot.
   testServo.attach(SERVO_PIN);
   testServo.write(90);
 

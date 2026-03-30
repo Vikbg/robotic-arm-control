@@ -90,3 +90,38 @@ The project will be considered complete if:
 - Nunchuck buttons trigger demo mode and reset reliably.
 - The system runs stably during public demonstration.
 - Electrical connections are safe and documented.
+
+## 7. Traceability
+
+### FR-1 Servo Control
+Implemented by the servo array, angle limits, and `Servo.write()` calls in `arduino/robotic_arm/robotic_arm.ino`.
+
+### FR-2 Independent Movement
+Implemented by the per-joint `targetAngle[]` and `currentAngle[]` state.
+
+### FR-3 Manual Control
+Implemented by Nunchuck input handling, joystick mapping, accelerometer mapping, and button gestures.
+
+### FR-4 Demo Mode
+Implemented by `MODE_DEMO` and the scripted `demoControl()` motion sequence.
+
+### FR-5 Safety Reset
+Implemented by `setHomePosition()` and the timed `C + Z` reset gesture.
+
+### FR-6 Mode Toggle
+Implemented by the C tap layer switch and the timed `C + Z` demo toggle.
+
+### NFR-1 Reliability
+Validated by long-run movement tests and stable power delivery.
+
+### NFR-2 Safety
+Validated by the external servo power supply and shared-ground wiring.
+
+### NFR-3 Stability
+Validated by observing that the Arduino does not reset under servo load.
+
+### NFR-4 Maintainability
+Supported by modular functions, named constants, and documentation in the repo.
+
+### NFR-5 Control Stability
+Implemented by deadzones, filtering, smoothing, and per-joint rate limiting.
