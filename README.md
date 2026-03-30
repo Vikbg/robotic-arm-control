@@ -44,23 +44,26 @@ Important: do not power 6 servos from Arduino 5V pin.
 
 ## Controls
 
-- Joystick X: base
-- Joystick Y: shoulder
-- C button: open gripper
-- Z button: close gripper
-- Hold C + Z: toggle demo mode
-- Hold C + Z (longer): home position
+- Joystick X: base continuous-rotation speed
+- Joystick Y: shoulder on layer A, elbow on layer B
+- Tilt X: wrist roll
+- Tilt Y: wrist pitch
+- Tap C: switch layer A/B
+- Hold C: open gripper
+- Hold Z: close gripper
+- Hold C + Z for about 0.7s: toggle demo mode
+- Hold C + Z for about 1.8s: home position and return to nunchuck mode
 
 ## Build And Upload
 
 From project root:
 
 ```bash
-./bin/arduino-cli compile --fqbn arduino:avr:uno arduino/robotic_arm
-./bin/arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno arduino/robotic_arm
+arduino-cli compile --fqbn arduino:avr:uno arduino/robotic_arm
+arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno arduino/robotic_arm
 ```
 
-If `arduino-cli` is in your PATH, remove `./bin/`.
+If you keep a local copy in `./bin/arduino-cli`, replace `arduino-cli` with that path.
 
 ## WiiChuck.h Mode (Optional)
 
