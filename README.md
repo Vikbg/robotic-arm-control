@@ -47,7 +47,8 @@ Important: do not power 6 servos from Arduino 5V pin.
 - Joystick X: base continuous-rotation speed
 - Joystick Y: shoulder on layer A, elbow on layer B
 - Tilt X: wrist roll
-- Tilt Y: wrist pitch
+- Tilt Y: wrist pitch (forward = wrist up, backward = wrist down)
+- Wrist pitch servo is software-reversed to match the physical mounting.
 - Tap C: switch layer A/B
 - Hold C: open gripper
 - Hold Z: close gripper

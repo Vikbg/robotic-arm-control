@@ -29,12 +29,18 @@ uint8_t targetAngle[6] = {90, 130, 90, 90, 90, 60};
 const uint8_t minAngle[6] = {0, 100, 0, 0, 20, 15};
 const uint8_t maxAngle[6] = {180, 160, 160, 180, 160, 75};
 const uint8_t homeAngle[6] = {90, 130, 90, 90, 90, 60};
+// Reverse a joint here if the servo is mounted opposite to the logical angle.
+const bool servoReversed[6] = {false, false, false, false, true, false};
 
 const int BASE_STOP_COMMAND = 90;
 const int BASE_MIN_COMMAND = 70;
 const int BASE_MAX_COMMAND = 110;
+const float WRIST_FILTER_ALPHA = 0.14f;
+const int WRIST_TARGET_DEADBAND = 1;
+const float GRIPPER_SPEED_PER_SEC = 35.0f;
 
 const int SMOOTH_STEP = 2;
+const uint8_t JOINT_SMOOTH_STEP[6] = {0, SMOOTH_STEP, SMOOTH_STEP, 1, 1, SMOOTH_STEP};
 const unsigned long CONTROL_INTERVAL_MS = 20;
 unsigned long lastControlMs = 0;
 
@@ -210,6 +216,13 @@ void setJointTarget(uint8_t joint, int angle)
 
 bool isContinuousJoint(uint8_t joint) { return joint == BASE; }
 
+uint8_t toServoCommand(uint8_t joint, uint8_t logicalAngle)
+{
+  if (joint >= 6 || !servoReversed[joint])
+    return logicalAngle;
+  return 180 - logicalAngle;
+}
+
 void smoothMoveStep()
 {
   for (int i = 0; i < 6; i++)
@@ -220,15 +233,16 @@ void smoothMoveStep()
     }
     else
     {
+      int step = JOINT_SMOOTH_STEP[i];
       int diff = targetAngle[i] - currentAngle[i];
-      if (diff > SMOOTH_STEP)
-        currentAngle[i] += SMOOTH_STEP;
-      else if (diff < -SMOOTH_STEP)
-        currentAngle[i] -= SMOOTH_STEP;
+      if (diff > step)
+        currentAngle[i] += step;
+      else if (diff < -step)
+        currentAngle[i] -= step;
       else
         currentAngle[i] = targetAngle[i];
     }
-    servos[i].write(currentAngle[i]);
+    servos[i].write(toServoCommand(i, currentAngle[i]));
   }
 }
 
@@ -620,6 +634,8 @@ void manualControl()
 
   static unsigned long lastManualControlMs = 0;
   static float gripperAccumulator = 0.0f;
+  static float filteredAccelX = 512.0f;
+  static float filteredAccelY = 512.0f;
   unsigned long now = millis();
   unsigned long elapsedMs = (lastManualControlMs == 0) ? CONTROL_INTERVAL_MS : (now - lastManualControlMs);
   lastManualControlMs = now;
@@ -644,18 +660,24 @@ void manualControl()
   // WRIST_ROLL ← tilt X, WRIST_PITCH ← tilt Y
   int clampedAccelX = constrain(accelX, accelMin, accelMax);
   int clampedAccelY = constrain(accelY, accelMin, accelMax);
-  targetAngle[WRIST_ROLL] = map(clampedAccelX, accelMin, accelMax, 0, 180);
-  targetAngle[WRIST_PITCH] = map(clampedAccelY, accelMin, accelMax, 160, 20);
+  filteredAccelX += (clampedAccelX - filteredAccelX) * WRIST_FILTER_ALPHA;
+  filteredAccelY += (clampedAccelY - filteredAccelY) * WRIST_FILTER_ALPHA;
+  int wristRollTarget = map((int)filteredAccelX, accelMin, accelMax, 0, 180);
+  // Keep wrist pitch aligned with the controller: tilt forward = wrist up.
+  int wristPitchTarget = map((int)filteredAccelY, accelMin, accelMax, 20, 160);
+  if (abs(wristRollTarget - targetAngle[WRIST_ROLL]) >= WRIST_TARGET_DEADBAND)
+    targetAngle[WRIST_ROLL] = wristRollTarget;
+  if (abs(wristPitchTarget - targetAngle[WRIST_PITCH]) >= WRIST_TARGET_DEADBAND)
+    targetAngle[WRIST_PITCH] = wristPitchTarget;
 
   // GRIPPER: C held long enough (> C_TAP_MAX_MS) → open; Z alone → close.
   // The delay prevents a layer-switch tap from accidentally moving the gripper.
-  const float gripperSpeedPerSec = 12.0f;
   float gripperDelta = 0.0f;
   bool cHeld = btnC && !btnZ && (millis() - cPressMs >= C_TAP_MAX_MS);
   if (cHeld)
-    gripperDelta = (elapsedMs / 1000.0f) * gripperSpeedPerSec;
+    gripperDelta = (elapsedMs / 1000.0f) * GRIPPER_SPEED_PER_SEC;
   else if (btnZ && !btnC)
-    gripperDelta = -(elapsedMs / 1000.0f) * gripperSpeedPerSec;
+    gripperDelta = -(elapsedMs / 1000.0f) * GRIPPER_SPEED_PER_SEC;
   else
     gripperAccumulator = 0.0f;
 
@@ -728,7 +750,7 @@ void setup()
     currentAngle[i] = isContinuousJoint(i) ? BASE_STOP_COMMAND : homeAngle[i];
     targetAngle[i] = currentAngle[i];
     servos[i].attach(SERVO_PINS[i]);
-    servos[i].write(currentAngle[i]);
+    servos[i].write(toServoCommand(i, currentAngle[i]));
   }
 
   lastControlMs = millis();
