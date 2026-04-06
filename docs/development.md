@@ -40,4 +40,3 @@ arduino-cli board listall
 
 - Runtime sketch: [arduino/robotic_arm/robotic_arm.ino](../arduino/robotic_arm/robotic_arm.ino)
 - Calibration sketch: [arduino/servo_calibration_d5/servo_calibration_d5.ino](../arduino/servo_calibration_d5/servo_calibration_d5.ino)
-

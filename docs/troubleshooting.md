@@ -39,4 +39,3 @@
 - Use the D5 servo calibration sketch to test one servo at a time.
 - Start at `90`, then move in small steps to confirm direction, neutral position, and safe travel.
 - If the motion is correct in the calibration sketch but wrong in the main sketch, the issue is likely in the mapping layer rather than the hardware.
-

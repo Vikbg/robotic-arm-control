@@ -51,4 +51,3 @@ The code treats the base as a continuous servo command around `90`, while the ot
 - `wokwi.toml` points to the compiled firmware in `build/`.
 - `diagram.json` currently models the Arduino, breadboard, and servos.
 - The Wokwi diagram is useful for servo wiring and motion testing, but it does not fully represent the physical Nunchuck wiring path.
-

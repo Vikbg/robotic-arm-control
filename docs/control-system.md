@@ -94,4 +94,3 @@ The loop is intentionally simple:
 1. Apply one smooth movement step to each servo.
 
 That separation is why the comments in the sketch focus on calibration and control intent instead of line-by-line mechanics.
-

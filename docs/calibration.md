@@ -47,4 +47,3 @@ If a joint moves the wrong way, first check the software convention:
 - if the command is correct but the servo motion is reversed, fix `servoReversed[]`
 
 That is the reason the code keeps logical angles separate from the final servo write.
-
