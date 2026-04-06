@@ -44,6 +44,6 @@ Current state: the core control software is implemented, but hardware validation
 ## Optional Advanced Phase
 
 - [ ] Build desktop Rust CLI sending serial commands
-- [x] Define simple serial protocol (`SET joint angle`)
+- [x] Define simple serial protocol (ex: `set <joint> <angle>`)
 - [ ] Add record/replay movement mode
 - [ ] Evaluate embedded Rust prototype separately
