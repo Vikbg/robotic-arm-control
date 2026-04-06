@@ -1,17 +1,18 @@
+/*
+ * 6-DOF Robotic Arm Control System
+ *
+ * Main firmware for an Arduino Uno based robotic arm driven by a Wii Nunchuck.
+ * This sketch manages the runtime control loop, serial diagnostics, demo mode,
+ * homing behavior, logical joint limits, and servo-aware output calibration.
+ *
+ * Project: robotic-arm-control
+ * Author: Viktor
+ * Hardware target: Arduino Uno
+ */
+
 #include <Servo.h>
 #include <Wire.h>
 #include <Arduino.h>
-
-// Robotic arm controller for Arduino Uno.
-//
-// The sketch supports three control modes:
-// - Nunchuck mode: joystick, accelerometer, and buttons drive the arm directly
-// - Serial mode: manual diagnostics and joint jogging from the serial monitor
-// - Demo mode: scripted motion for showcase use
-//
-// Internally, the code keeps "logical" joint angles stable across the control
-// logic and only converts to the physical servo command at write time. That
-// makes joint limits, home values, and calibration easier to reason about.
 #define USE_WIICHUCK_LIB 0
 
 #if USE_WIICHUCK_LIB
