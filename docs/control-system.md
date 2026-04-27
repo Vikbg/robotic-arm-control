@@ -43,8 +43,9 @@ Current limits are:
 
 The code also contains these tuning values:
 
-- `WRIST_FILTER_ALPHA = 0.14`
-- `WRIST_TARGET_DEADBAND = 1`
+- `WRIST_FILTER_ALPHA = 0.05`
+- `WRIST_TARGET_DEADBAND = 3`
+- `WRIST_TARGET_RATE_LIMIT = 2`
 - `GRIPPER_SPEED_PER_SEC = 35.0`
 - `JOINT_SMOOTH_STEP = {0, 2, 2, 1, 1, 2}`
 

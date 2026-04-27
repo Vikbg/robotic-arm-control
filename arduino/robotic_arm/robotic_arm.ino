@@ -46,23 +46,24 @@ const bool servoReversed[6] = {false, false, false, false, true, false};
 // Calibration and tuning values:
 // - minAngle/maxAngle/homeAngle define safe logical limits and the default pose
 // - servoReversed applies mechanical inversion only when writing to the servo
-// - WRIST_FILTER_ALPHA and WRIST_TARGET_DEADBAND reduce wrist jitter from the
-//   Nunchuck accelerometer
+// - WRIST_FILTER_ALPHA, WRIST_TARGET_DEADBAND and WRIST_TARGET_RATE_LIMIT
+//   reduce wrist jitter from the Nunchuck accelerometer
 // - GRIPPER_SPEED_PER_SEC controls how fast the gripper opens/closes while
 //   C or Z is held
 // - JOINT_SMOOTH_STEP keeps shoulder/elbow motion smoother than raw step changes
 const int BASE_STOP_COMMAND = 90;
 const int BASE_MIN_COMMAND = 70;
 const int BASE_MAX_COMMAND = 110;
-const float WRIST_FILTER_ALPHA = 0.14f;
-const int WRIST_TARGET_DEADBAND = 1;
+const float WRIST_FILTER_ALPHA = 0.05f;
+const int WRIST_TARGET_DEADBAND = 3;
+const int WRIST_TARGET_RATE_LIMIT = 2;
 const float GRIPPER_SPEED_PER_SEC = 35.0f;
 
 const int SMOOTH_STEP = 2;
 const uint8_t JOINT_SMOOTH_STEP[6] = {0, SMOOTH_STEP, SMOOTH_STEP, 1, 1, SMOOTH_STEP};
 const unsigned long CONTROL_INTERVAL_MS = 20;
 const bool STARTUP_SELF_CHECK_ENABLED = true;
-const unsigned long STARTUP_NUNCHUCK_PROBE_ATTEMPTS = 3;
+const uint8_t STARTUP_NUNCHUCK_PROBE_ATTEMPTS = 3;
 const uint8_t MAX_RECORD_FRAMES = 48;
 const unsigned long RECORD_INTERVAL_MS = 200;
 unsigned long lastControlMs = 0;
@@ -105,6 +106,7 @@ const unsigned long C_TAP_MAX_MS = 350;
 bool comboPrev = false;
 unsigned long comboStartMs = 0;
 bool comboActionDone = false;
+bool demoPending = false; 
 const unsigned long DEMO_TOGGLE_HOLD_MS = 700;
 const unsigned long HOME_HOLD_MS = 1800;
 
@@ -942,46 +944,76 @@ void manualControl()
   static float gripperAccumulator = 0.0f;
   static float filteredAccelX = 512.0f;
   static float filteredAccelY = 512.0f;
+
   unsigned long now = millis();
-  unsigned long elapsedMs = (lastManualControlMs == 0) ? CONTROL_INTERVAL_MS : (now - lastManualControlMs);
+  unsigned long elapsedMs = (lastManualControlMs == 0)
+      ? CONTROL_INTERVAL_MS
+      : (now - lastManualControlMs);
   lastManualControlMs = now;
 
   int deltaX = mapJoystickToDelta(joyX, deadzone, maxBaseDelta);
   int deltaY = mapJoystickToDelta(joyY, deadzone, maxJointDeltaPerTick);
 
-  // BASE: always joystick X
+  // BASE
   targetAngle[BASE] = BASE_STOP_COMMAND + (deltaX * 4);
   targetAngle[BASE] = constrain(targetAngle[BASE], BASE_MIN_COMMAND, BASE_MAX_COMMAND);
 
   // Layer A → SHOULDER | Layer B → ELBOW
   if (nunchuckLayer == 0)
-  {
     targetAngle[SHOULDER] = currentAngle[SHOULDER] + deltaY;
-  }
   else
-  {
     targetAngle[ELBOW] = currentAngle[ELBOW] + deltaY;
-  }
+
+  // ---------------------------------------------------------------------------
+  // Compute gripper intent FIRST, before the wrist section.
+  // We need to know whether the gripper is actively moving so we can gate
+  // wrist target updates — see explanation below.
+  // ---------------------------------------------------------------------------
+  bool cHeld = btnC && !btnZ && (millis() - cPressMs >= C_TAP_MAX_MS);
+  bool gripperMoving = cHeld || (btnZ && !btnC);
 
   // WRIST_ROLL ← tilt X, WRIST_PITCH ← tilt Y
   int clampedAccelX = constrain(accelX, accelMin, accelMax);
   int clampedAccelY = constrain(accelY, accelMin, accelMax);
-  // Filter accelerometer motion before mapping it to wrist targets so small
-  // sensor noise does not immediately become servo jitter.
+
+  // Always keep filtering regardless of gripper state. If we paused the filter
+  // during gripper motion, the filtered value would go stale and produce a
+  // large jump when the gripper stops and wrist control resumes.
   filteredAccelX += (clampedAccelX - filteredAccelX) * WRIST_FILTER_ALPHA;
   filteredAccelY += (clampedAccelY - filteredAccelY) * WRIST_FILTER_ALPHA;
-  int wristRollTarget = map((int)filteredAccelX, accelMin, accelMax, 0, 180);
-  // Keep wrist pitch aligned with the controller: tilt forward = wrist up.
-  int wristPitchTarget = map((int)filteredAccelY, accelMin, accelMax, 20, 160);
-  if (abs(wristRollTarget - targetAngle[WRIST_ROLL]) >= WRIST_TARGET_DEADBAND)
-    targetAngle[WRIST_ROLL] = wristRollTarget;
-  if (abs(wristPitchTarget - targetAngle[WRIST_PITCH]) >= WRIST_TARGET_DEADBAND)
-    targetAngle[WRIST_PITCH] = wristPitchTarget;
 
-  // GRIPPER: C held long enough (> C_TAP_MAX_MS) → open; Z alone → close.
-  // The delay prevents a layer-switch tap from accidentally moving the gripper.
+  int wristRollTarget  = map((int)filteredAccelX, accelMin, accelMax, 0, 180);
+  int wristPitchTarget = map((int)filteredAccelY, accelMin, accelMax, 20, 160);
+
+  // Gate wrist target updates: when the gripper is moving, its motor vibration
+  // contaminates the accelerometer readings. We freeze the wrist targets during
+  // this window so the servo does not chase motor noise. The filter keeps
+  // tracking so the first update after release reflects the true wrist position.
+  if (!gripperMoving)
+  {
+    int wristRollDelta = wristRollTarget - (int)targetAngle[WRIST_ROLL];
+    if (abs(wristRollDelta) >= WRIST_TARGET_DEADBAND) {
+      int clampedDelta = constrain(wristRollDelta,
+                                   -WRIST_TARGET_RATE_LIMIT,
+                                    WRIST_TARGET_RATE_LIMIT);
+      targetAngle[WRIST_ROLL] = (uint8_t)constrain(
+          (int)targetAngle[WRIST_ROLL] + clampedDelta,
+          minAngle[WRIST_ROLL], maxAngle[WRIST_ROLL]);
+    }
+
+    int wristPitchDelta = wristPitchTarget - (int)targetAngle[WRIST_PITCH];
+    if (abs(wristPitchDelta) >= WRIST_TARGET_DEADBAND) {
+      int clampedDelta = constrain(wristPitchDelta,
+                                   -WRIST_TARGET_RATE_LIMIT,
+                                    WRIST_TARGET_RATE_LIMIT);
+      targetAngle[WRIST_PITCH] = (uint8_t)constrain(
+          (int)targetAngle[WRIST_PITCH] + clampedDelta,
+          minAngle[WRIST_PITCH], maxAngle[WRIST_PITCH]);
+    }
+  }
+
+  // GRIPPER: reuse the already-computed cHeld and gripperMoving
   float gripperDelta = 0.0f;
-  bool cHeld = btnC && !btnZ && (millis() - cPressMs >= C_TAP_MAX_MS);
   if (cHeld)
     gripperDelta = (elapsedMs / 1000.0f) * GRIPPER_SPEED_PER_SEC;
   else if (btnZ && !btnC)
@@ -1010,7 +1042,7 @@ void demoControl()
 {
   unsigned long t = millis();
   targetAngle[BASE] = BASE_STOP_COMMAND + (int)(12.0 * sin(t / 900.0));
-  targetAngle[SHOULDER] = 90 + (int)(20.0 * sin(t / 700.0));
+  targetAngle[SHOULDER] = 130 + (int)(20.0 * sin(t / 700.0));
   targetAngle[ELBOW] = 90 + (int)(15.0 * sin(t / 600.0));
   targetAngle[WRIST_ROLL] = 90 + (int)(35.0 * sin(t / 1000.0));
   targetAngle[WRIST_PITCH] = 90 + (int)(20.0 * sin(t / 1200.0));
@@ -1020,8 +1052,6 @@ void demoControl()
 
 void handleButtonGestures()
 {
-  // Combo gestures are resolved here before the motion step so they can switch
-  // mode or reset the arm without waiting for the next manual control update.
   bool comboNow = btnC && btnZ;
 
   if (comboNow && !comboPrev)
@@ -1029,24 +1059,25 @@ void handleButtonGestures()
     comboStartMs = millis();
     comboActionDone = false;
   }
-  if (comboNow && !comboActionDone)
-  {
+  if (comboNow && !comboActionDone) {
     unsigned long held = millis() - comboStartMs;
-    if (held >= HOME_HOLD_MS)
-    {
+    if (held >= HOME_HOLD_MS) {
       setHomePosition();
       controlMode = MODE_NUNCHUCK;
       nunchuckLayer = 0;
       comboActionDone = true;
-    }
-    else if (held >= DEMO_TOGGLE_HOLD_MS)
-    {
-      controlMode = (controlMode == MODE_DEMO) ? MODE_NUNCHUCK : MODE_DEMO;
-      comboActionDone = true;
+    } else if (held >= DEMO_TOGGLE_HOLD_MS && !demoPending) {
+      demoPending = true;
     }
   }
-  if (!comboNow && comboPrev)
+  if (!comboNow && comboPrev) {
+    if (demoPending && !comboActionDone) {
+      controlMode = (controlMode == MODE_DEMO) ? MODE_NUNCHUCK : MODE_DEMO;
+    }
+    demoPending = false;
     comboActionDone = false;
+  }
+
   comboPrev = comboNow;
 }
 
@@ -1076,9 +1107,10 @@ void loop()
   // execute one smooth motion step.
   handleSerialInput();
 
-  if (millis() - lastControlMs < CONTROL_INTERVAL_MS)
-    return;
-  lastControlMs = millis();
+  unsigned long now = millis();
+  if (now - lastControlMs < CONTROL_INTERVAL_MS)
+      return;
+  lastControlMs = now;
 
   if (controlMode != MODE_SERIAL && controlMode != MODE_REPLAY)
   {
