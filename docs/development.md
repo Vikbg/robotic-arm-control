@@ -40,3 +40,22 @@ arduino-cli board listall
 
 - Runtime sketch: [arduino/robotic_arm/robotic_arm.ino](../arduino/robotic_arm/robotic_arm.ino)
 - Calibration sketch: [arduino/servo_calibration_d5/servo_calibration_d5.ino](../arduino/servo_calibration_d5/servo_calibration_d5.ino)
+
+## Rust CLI
+
+The repo also includes a small Rust serial helper in `tools/arm-cli`.
+
+Build it with:
+
+```bash
+cargo build --manifest-path tools/arm-cli/Cargo.toml
+```
+
+Example commands:
+
+```bash
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 status
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 set shoulder 140
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 rec start
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 play
+```

@@ -36,13 +36,14 @@ The code treats the base as a continuous servo command around `90`, while the ot
 | --- | --- |
 | SDA | `A4` |
 | SCL | `A5` |
-| VCC | `3.3V` or `5V`, depending on the module |
+| VCC | `3.3V` |
 | GND | `GND` |
 
 ## Power Notes
 
 - Use an external 5V to 6V supply for the servos.
 - Keep Arduino logic on USB or a separate regulated source.
+- Power the Wii Nunchuck from Arduino `3.3V`.
 - Tie Arduino GND, servo supply GND, and Nunchuck GND together.
 - Do not power all servos from the Arduino `5V` pin.
 

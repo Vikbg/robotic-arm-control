@@ -61,6 +61,10 @@ const float GRIPPER_SPEED_PER_SEC = 35.0f;
 const int SMOOTH_STEP = 2;
 const uint8_t JOINT_SMOOTH_STEP[6] = {0, SMOOTH_STEP, SMOOTH_STEP, 1, 1, SMOOTH_STEP};
 const unsigned long CONTROL_INTERVAL_MS = 20;
+const bool STARTUP_SELF_CHECK_ENABLED = true;
+const unsigned long STARTUP_NUNCHUCK_PROBE_ATTEMPTS = 3;
+const uint8_t MAX_RECORD_FRAMES = 48;
+const unsigned long RECORD_INTERVAL_MS = 200;
 unsigned long lastControlMs = 0;
 
 // ---------------------------------------------------------------------------
@@ -108,10 +112,19 @@ enum ControlMode
 {
   MODE_NUNCHUCK = 0,
   MODE_SERIAL,
-  MODE_DEMO
+  MODE_DEMO,
+  MODE_REPLAY
 };
 ControlMode controlMode = MODE_NUNCHUCK;
+ControlMode replayReturnMode = MODE_NUNCHUCK;
 uint8_t selectedJoint = BASE;
+
+uint8_t recordedFrames[MAX_RECORD_FRAMES][6];
+uint8_t recordedFrameCount = 0;
+uint8_t replayIndex = 0;
+bool isRecording = false;
+unsigned long lastRecordMs = 0;
+unsigned long lastReplayMs = 0;
 
 char serialBuffer[32];
 uint8_t serialLen = 0;
@@ -130,6 +143,18 @@ void printCompactStatus();
 void printJointSummary(uint8_t joint);
 void printPinMap();
 bool isContinuousJoint(uint8_t joint);
+void printRecordingStatus();
+bool hasValidHomeConfiguration();
+bool hasUniqueServoPins();
+bool probeNunchuck(uint8_t attempts);
+void runStartupSelfCheck();
+void startRecording();
+void stopRecording();
+void clearRecording();
+void captureRecordFrame(bool forceCapture);
+void startReplay();
+void replayControl();
+void loadRecordedFrame(uint8_t frameIndex);
 
 // ---------------------------------------------------------------------------
 // Nunchuck I/O
@@ -202,9 +227,45 @@ bool readNunchuck()
 #endif
 }
 
+bool probeNunchuck(uint8_t attempts)
+{
+  for (uint8_t attempt = 0; attempt < attempts; attempt++)
+  {
+    if (readNunchuck())
+      return true;
+    delay(5);
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Joint helpers
 // ---------------------------------------------------------------------------
+
+bool hasValidHomeConfiguration()
+{
+  for (int i = 0; i < 6; i++)
+  {
+    if (isContinuousJoint(i))
+      continue;
+    if (homeAngle[i] < minAngle[i] || homeAngle[i] > maxAngle[i])
+      return false;
+  }
+  return true;
+}
+
+bool hasUniqueServoPins()
+{
+  for (int i = 0; i < 6; i++)
+  {
+    for (int j = i + 1; j < 6; j++)
+    {
+      if (SERVO_PINS[i] == SERVO_PINS[j])
+        return false;
+    }
+  }
+  return true;
+}
 
 int mapJoystickToDelta(int value, int deadzone, int maxDelta)
 {
@@ -276,6 +337,158 @@ void setHomePosition()
     targetAngle[i] = isContinuousJoint(i) ? BASE_STOP_COMMAND : homeAngle[i];
 }
 
+void printRecordingStatus()
+{
+  Serial.print(F("Record: "));
+  Serial.print(isRecording ? F("on") : F("off"));
+  Serial.print(F(" | frames="));
+  Serial.print((int)recordedFrameCount);
+  Serial.print(F("/"));
+  Serial.print((int)MAX_RECORD_FRAMES);
+  if (controlMode == MODE_REPLAY)
+  {
+    Serial.print(F(" | replay="));
+    Serial.print((int)(replayIndex + 1));
+    Serial.print(F("/"));
+    Serial.print((int)recordedFrameCount);
+  }
+  Serial.println();
+}
+
+void clearRecording()
+{
+  isRecording = false;
+  recordedFrameCount = 0;
+  replayIndex = 0;
+  lastRecordMs = 0;
+  lastReplayMs = 0;
+}
+
+void captureRecordFrame(bool forceCapture)
+{
+  if (!isRecording)
+    return;
+
+  unsigned long now = millis();
+  if (!forceCapture && lastRecordMs != 0 && now - lastRecordMs < RECORD_INTERVAL_MS)
+    return;
+
+  if (recordedFrameCount >= MAX_RECORD_FRAMES)
+  {
+    isRecording = false;
+    Serial.println(F("[record] buffer full, recording stopped."));
+    return;
+  }
+
+  for (int i = 0; i < 6; i++)
+    recordedFrames[recordedFrameCount][i] = targetAngle[i];
+
+  recordedFrameCount++;
+  lastRecordMs = now;
+
+  if (recordedFrameCount >= MAX_RECORD_FRAMES)
+  {
+    isRecording = false;
+    Serial.println(F("[record] buffer full, recording stopped."));
+  }
+}
+
+void startRecording()
+{
+  if (controlMode == MODE_REPLAY)
+  {
+    Serial.println(F("stop replay before recording"));
+    return;
+  }
+
+  isRecording = true;
+  lastRecordMs = 0;
+  captureRecordFrame(true);
+  printRecordingStatus();
+}
+
+void stopRecording()
+{
+  isRecording = false;
+  printRecordingStatus();
+}
+
+void loadRecordedFrame(uint8_t frameIndex)
+{
+  if (frameIndex >= recordedFrameCount)
+    return;
+  for (int i = 0; i < 6; i++)
+    targetAngle[i] = recordedFrames[frameIndex][i];
+  applyJointLimits();
+}
+
+void startReplay()
+{
+  if (recordedFrameCount == 0)
+  {
+    Serial.println(F("no recorded frames"));
+    return;
+  }
+
+  isRecording = false;
+  replayReturnMode = (controlMode == MODE_REPLAY) ? MODE_NUNCHUCK : controlMode;
+  controlMode = MODE_REPLAY;
+  replayIndex = 0;
+  lastReplayMs = 0;
+  loadRecordedFrame(replayIndex);
+  printRecordingStatus();
+}
+
+void replayControl()
+{
+  if (recordedFrameCount == 0)
+  {
+    controlMode = replayReturnMode;
+    return;
+  }
+
+  unsigned long now = millis();
+  if (lastReplayMs == 0)
+  {
+    loadRecordedFrame(replayIndex);
+    lastReplayMs = now;
+    return;
+  }
+
+  if (now - lastReplayMs < RECORD_INTERVAL_MS)
+    return;
+
+  lastReplayMs = now;
+  if (replayIndex + 1 >= recordedFrameCount)
+  {
+    controlMode = replayReturnMode;
+    Serial.println(F("[replay] complete"));
+    return;
+  }
+
+  replayIndex++;
+  loadRecordedFrame(replayIndex);
+}
+
+void runStartupSelfCheck()
+{
+  if (!STARTUP_SELF_CHECK_ENABLED)
+    return;
+
+  bool pinsOk = hasUniqueServoPins();
+  bool homesOk = hasValidHomeConfiguration();
+  bool nunchuckOk = probeNunchuck(STARTUP_NUNCHUCK_PROBE_ATTEMPTS);
+
+  Serial.println(F("[self-check] startup diagnostics"));
+  Serial.print(F("  servo pin map: "));
+  Serial.println(pinsOk ? F("ok") : F("duplicate pin detected"));
+  Serial.print(F("  home limits:   "));
+  Serial.println(homesOk ? F("ok") : F("invalid home angle"));
+  Serial.print(F("  nunchuck I2C:  "));
+  Serial.println(nunchuckOk ? F("detected") : F("not detected"));
+  Serial.println(F("[self-check] done"));
+}
+
 // ---------------------------------------------------------------------------
 // Serial print helpers
 // ---------------------------------------------------------------------------
@@ -286,10 +499,17 @@ void printHelp()
   Serial.println(F("  h/help       show this help"));
   Serial.println(F("  p            full status"));
   Serial.println(F("  pins         servo wiring"));
+  Serial.println(F("  selfcheck    rerun startup diagnostics"));
   Serial.println(F("  mode s|n|d   serial / nunchuck / demo"));
   Serial.println(F("  sel <0-5>    select joint"));
   Serial.println(F("  set <j> <a>  set joint angle"));
   Serial.println(F("  step <j> <d> add delta to joint"));
+  Serial.println(F("  rec start    start movement recording"));
+  Serial.println(F("  rec stop     stop movement recording"));
+  Serial.println(F("  rec clear    erase recorded frames"));
+  Serial.println(F("  rec status   show record/replay status"));
+  Serial.println(F("  play         replay recorded movement"));
+  Serial.println(F("  stop         stop replay / recording"));
   Serial.println(F("--- Serial keys ---"));
   Serial.println(F("  1-6 select | a/z jog -/+ | m/n/d mode"));
   Serial.println(F("--- Nunchuck (6 joints) ---"));
@@ -336,6 +556,8 @@ void printStatus()
   Serial.print(accelY);
   Serial.print(F(" Z="));
   Serial.println(accelZ);
+  Serial.print(F("  "));
+  printRecordingStatus();
   Serial.println();
 }
 
@@ -370,6 +592,8 @@ void printModeName()
     Serial.print(F("serial"));
   else if (controlMode == MODE_DEMO)
     Serial.print(F("demo"));
+  else if (controlMode == MODE_REPLAY)
+    Serial.print(F("replay"));
   else
     Serial.print(F("nunchuck"));
 }
@@ -488,6 +712,11 @@ void processSerialLine(char *line)
     printPinMap();
     return;
   }
+  if (tokenEquals(argv[0], "selfcheck"))
+  {
+    runStartupSelfCheck();
+    return;
+  }
 
   if (tokenEquals(argv[0], "mode") && argc >= 2)
   {
@@ -503,6 +732,48 @@ void processSerialLine(char *line)
       return;
     }
     printCompactStatus();
+    return;
+  }
+  if (tokenEquals(argv[0], "rec") && argc >= 2)
+  {
+    if (tokenEquals(argv[1], "start"))
+    {
+      startRecording();
+      return;
+    }
+    if (tokenEquals(argv[1], "stop"))
+    {
+      stopRecording();
+      return;
+    }
+    if (tokenEquals(argv[1], "clear"))
+    {
+      clearRecording();
+      printRecordingStatus();
+      return;
+    }
+    if (tokenEquals(argv[1], "status"))
+    {
+      printRecordingStatus();
+      return;
+    }
+    Serial.println(F("bad rec command"));
+    return;
+  }
+  if (tokenEquals(argv[0], "play"))
+  {
+    startReplay();
+    return;
+  }
+  if (tokenEquals(argv[0], "stop"))
+  {
+    if (controlMode == MODE_REPLAY)
+    {
+      controlMode = replayReturnMode;
+      Serial.println(F("[replay] stopped"));
+    }
+    if (isRecording)
+      stopRecording();
     return;
   }
   if (tokenEquals(argv[0], "sel") && argc >= 2)
@@ -792,6 +1063,7 @@ void setup()
     servos[i].write(toServoCommand(i, currentAngle[i]));
   }
 
+  runStartupSelfCheck();
   lastControlMs = millis();
   Serial.println(F("Robotic arm controller started."));
   printHelp();
@@ -808,7 +1080,7 @@ void loop()
     return;
   lastControlMs = millis();
 
-  if (controlMode != MODE_SERIAL)
+  if (controlMode != MODE_SERIAL && controlMode != MODE_REPLAY)
   {
     bool ok = readNunchuck();
     if (!ok)
@@ -825,8 +1097,11 @@ void loop()
   else if (controlMode == MODE_SERIAL)
   { /* targets driven by serial */
   }
+  else if (controlMode == MODE_REPLAY)
+    replayControl();
   else
     manualControl();
 
+  captureRecordFrame(false);
   smoothMoveStep();
 }

@@ -1,10 +1,11 @@
 # Control System
 
-This project is driven by `arduino/robotic_arm/robotic_arm.ino`, which supports three modes:
+This project is driven by `arduino/robotic_arm/robotic_arm.ino`, which supports four modes:
 
 - `MODE_NUNCHUCK` for live control from the Wii Nunchuck
 - `MODE_SERIAL` for direct diagnostics and manual jogs over USB serial
 - `MODE_DEMO` for the automatic motion sequence
+- `MODE_REPLAY` for replaying a recorded movement sequence
 
 The sketch keeps a logical angle model in software, then writes physical servo commands at the end. That matters because one joint can be mechanically reversed without changing the rest of the control logic.
 
@@ -72,10 +73,14 @@ Serial control is also part of the runtime behavior. The supported commands are:
 - `h` or `help`
 - `p`
 - `pins`
+- `selfcheck`
 - `mode s|n|d`
 - `sel <0-5>`
 - `set <joint> <angle>`
 - `step <joint> <delta>`
+- `rec start|stop|clear|status`
+- `play`
+- `stop`
 
 Single-key shortcuts are also supported:
 
@@ -88,9 +93,10 @@ Single-key shortcuts are also supported:
 The loop is intentionally simple:
 
 1. Read serial input.
-1. Read the Nunchuck unless serial mode is active.
+1. Read the Nunchuck unless serial or replay mode is active.
 1. Resolve gestures and control mode.
 1. Compute target angles.
+1. Optionally record the current target frame.
 1. Apply one smooth movement step to each servo.
 
 That separation is why the comments in the sketch focus on calibration and control intent instead of line-by-line mechanics.

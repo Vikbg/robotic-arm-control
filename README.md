@@ -16,6 +16,7 @@ Main hardware assumptions:
 - `3x MG996R` for base, shoulder, and elbow
 - `3x SG90` for wrist roll, wrist pitch, and gripper
 - `1x Wii Nunchuck` connected over I2C
+- Wii Nunchuck powered from Arduino `3.3V`
 - external `5V-6V` servo power supply with shared ground
 
 Important: do not power all six servos from the Arduino `5V` pin.
@@ -23,11 +24,13 @@ Important: do not power all six servos from the Arduino `5V` pin.
 ## Features
 
 - Live Nunchuck control with joystick, accelerometer tilt, and button gestures
-- Three control modes: `NUNCHUCK`, `SERIAL`, and `DEMO`
+- Four control modes: `NUNCHUCK`, `SERIAL`, `DEMO`, and `REPLAY`
 - Per-joint angle limits and home positions
 - Software smoothing, wrist filtering, and gripper speed control
 - Serial diagnostics commands for testing and manual jogging
+- Record and replay support for short motion sequences
 - A separate D5 servo calibration utility
+- A small Rust desktop CLI for sending serial commands
 - Wokwi simulation support using prebuilt firmware artifacts
 
 ## Quick Start
@@ -79,16 +82,33 @@ Supported commands:
 - `h` / `help`
 - `p`
 - `pins`
+- `selfcheck`
 - `mode s|n|d`
 - `sel <0-5>`
 - `set <joint> <angle>`
 - `step <joint> <delta>`
+- `rec start|stop|clear|status`
+- `play`
+- `stop`
 
 Single-key shortcuts:
 
 - `1..6` select joint
 - `a` / `z` jog selected joint by `-2` / `+2`
 - `m` / `n` / `d` switch to serial / nunchuck / demo mode
+
+## Rust CLI
+
+The repository also includes a small Linux-friendly Rust CLI in `tools/arm-cli`.
+
+Examples:
+
+```bash
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 status
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 set shoulder 140
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 rec start
+cargo run --manifest-path tools/arm-cli/Cargo.toml -- /dev/ttyACM0 play
+```
 
 ## Repository Layout
 
@@ -103,8 +123,13 @@ robotic-arm-control/
 │   ├── calibration.md
 │   ├── control-system.md
 │   ├── development.md
+│   ├── embedded-rust-evaluation.md
 │   ├── hardware.md
+│   ├── presentation/
+│   ├── tests/
 │   └── troubleshooting.md
+├── tools/
+│   └── arm-cli/
 ├── README.md
 ├── NOTES.md
 ├── REQUIREMENTS_SPECIFICATION.md
@@ -121,6 +146,9 @@ Start here for deeper information:
 - [Control System](docs/control-system.md)
 - [Calibration](docs/calibration.md)
 - [Development Guide](docs/development.md)
+- [Embedded Rust Evaluation](docs/embedded-rust-evaluation.md)
+- [Presentation Notes](docs/presentation/README.md)
+- [Test Reports](docs/tests/README.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Requirements Specification](REQUIREMENTS_SPECIFICATION.md)
 - [Project TODO](TODO.md)

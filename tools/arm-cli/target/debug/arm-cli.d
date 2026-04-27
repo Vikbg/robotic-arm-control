@@ -1,0 +1,1 @@
+/home/viktor_srhk/Documents/HighSchool/Personal/SI-CIT/robotic-arm-control/tools/arm-cli/target/debug/arm-cli: /home/viktor_srhk/Documents/HighSchool/Personal/SI-CIT/robotic-arm-control/tools/arm-cli/src/main.rs
