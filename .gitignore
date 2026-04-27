@@ -1,0 +1,6 @@
+.vscode/
+docs/latex/*.{aux,fdb_latexmk,fls,log,synctex.gz}
+docs/presentation/
+docs/tests/*draft.md
+docs/tests/README.md
+docs/tests/TEST_REPORT_TEMPLATE.md
